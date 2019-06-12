@@ -102,7 +102,7 @@
   any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
   roles:
     - { role: kubespray-defaults}
-    - { role: network_plugin/calico/rr, tags: network }
+    - { role: network_plugin/calico/rr, when: calico_in_cluster_rr == false, tags: network }
 
 - hosts: kube-master
   any_errors_fatal: "{{ any_errors_fatal | default(true) }}"

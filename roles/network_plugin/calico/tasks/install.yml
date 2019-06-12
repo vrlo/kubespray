@@ -213,6 +213,31 @@
     - local_as is defined
     - groups['calico-rr'] | default([]) | length == 0
 
+- name: Calico | Configure node as in-cluster route reflector
+  shell: >
+   echo '{
+   "apiVersion": "projectcalico.org/v3",
+   "kind": "Node",
+   "metadata": {
+      "name": "{{ inventory_hostname }}",
+      "labels": {
+        "{{ calico_rr_label }}": true
+      }
+   },
+   "spec": {
+      "bgp": {
+        "routeReflectorClusterID": "{{ cluster_id }}"
+      },
+      "orchRefs":[{"nodeName":"{{ inventory_hostname }}","orchestrator":"k8s"}]
+   }}' | {{ bin_dir }}/calicoctl.sh create --skip-exists -f -
+  retries: 4
+  delay: "{{ retry_stagger | random + 3 }}"
+  when:
+    - calico_version is version('v3.3.0', '>=')
+    - peer_with_router|default(false)
+    - calico_in_cluster_rr
+    - inventory_hostname in groups['calico-rr']
+
 - name: Calico | Configure peering with router(s) at node scope
   shell: >
    echo '{
@@ -234,6 +259,7 @@
     - calico_version is version('v3.0.0', '>=')
     - peer_with_router|default(false)
     - inventory_hostname in groups['k8s-cluster']
+    - not calico_in_cluster_rr
 
 - name: Calico | Configure peering with router(s) at node scope (legacy)
   shell: >
@@ -273,6 +299,7 @@
     - calico_version | version_compare('v3.0.0', '>=')
     - peer_with_router|default(false)
     - inventory_hostname in groups['k8s-cluster']
+    - not calico_in_cluster_rr
 
 - name: Calico | Configure peering with router(s) at global scope (legacy)
   shell: >
@@ -292,7 +319,7 @@
     - peer_with_router|default(false)
     - inventory_hostname in groups['k8s-cluster']
 
-- name: Calico | Configure peering with route reflectors
+- name: Calico | Configure peering with route reflectors (classic standalone)
   shell: >
    echo '{
    "apiVersion": "projectcalico.org/v3",
@@ -313,6 +340,7 @@
     - calico_version is version('v3.0.0', '>=')
     - peer_with_calico_rr|default(false)
     - inventory_hostname in groups['k8s-cluster']
+    - not calico_in_cluster_rr
     - hostvars[item]['cluster_id'] == cluster_id
 
 - name: Calico | Configure peering with route reflectors (legacy)
@@ -335,6 +363,50 @@
     - peer_with_calico_rr|default(false)
     - hostvars[item]['cluster_id'] == cluster_id
 
+- name: Calico | Configure peering with in-cluster route reflectors
+  shell: >
+   echo '{
+   "apiVersion": "projectcalico.org/v3",
+   "kind": "BGPPeer",
+   "metadata": {
+      "name": "peer-to-rrs"
+   },
+   "spec": {
+      "nodeSelector": "!has({{ calico_rr_label }})",
+      "peerSelector": "has({{ calico_rr_label }})"
+   }}' | {{ bin_dir }}/calicoctl.sh create --skip-exists -f -
+  retries: 4
+  delay: "{{ retry_stagger | random + 3 }}"
+  run_once: true
+  when:
+    - calico_version is version('v3.3.0', '>=')
+    - peer_with_calico_rr|default(false)
+    - inventory_hostname in groups['k8s-cluster']
+    - calico_in_cluster_rr
+
+- name: Calico | Configure peering in-cluster rr's with router(s)
+  shell: >
+   echo '{
+   "apiVersion": "projectcalico.org/v3",
+   "kind": "BGPPeer",
+   "metadata": {
+      "name": "global-rr-to-{{ item.router_id }}"
+   },
+   "spec": {
+      "asNumber": "{{ item.as }}",
+      "nodeSelector": "has({{ calico_rr_label }})",
+      "peerIP": "{{ item.router_id }}"
+   }}' | {{ bin_dir }}/calicoctl.sh create --skip-exists -f -
+  retries: 4
+  delay: "{{ retry_stagger | random + 3 }}"
+  with_items:
+    - "{{ peers|selectattr('scope','defined')|selectattr('scope','equalto', 'global')|list|default([]) }}"
+  run_once: true
+  when:
+    - calico_version | version_compare('v3.3.0', '>=')
+    - peer_with_router|default(false)
+    - inventory_hostname in groups['k8s-cluster']
+    - calico_in_cluster_rr
 
 - name: Calico | Create calico manifests
   template:

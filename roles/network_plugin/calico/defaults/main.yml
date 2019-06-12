@@ -15,6 +15,11 @@ calico_cert_dir: /etc/calico/certs
 # Global as_num (/calico/bgp/v1/global/as_num)
 global_as_num: "64512"
 
+# in-cluster route reflector
+calico_in_cluster_rr: false
+calico_rr_label: i-am-a-route-reflector
+cluster_id: 224.0.0.1
+
 # You can set MTU value here. If left undefined or empty, it will
 # not be specified in calico CNI config, so Calico will use built-in
 # defaults. The value should be a number, not a string.

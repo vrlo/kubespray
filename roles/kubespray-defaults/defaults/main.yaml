@@ -132,6 +132,9 @@ kube_network_plugin_multus: false
 # Determines if calico-rr group exists
 peer_with_calico_rr: "{{ 'calico-rr' in groups and groups['calico-rr']|length > 0 }}"
 
+# Enable calico/node route reflector instead of calico/routereflector
+calico_in_cluster_rr: "{{ calico_version is version('v3.3.0', '>=') | default(false)"
+
 # Set to false to disable calico-upgrade
 calico_upgrade_enabled: true
 
